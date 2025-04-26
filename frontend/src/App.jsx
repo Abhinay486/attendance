@@ -10,7 +10,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
 
-    const backendurl = "http://localhost:5000";
+    const backendurl = "https://attendance-4dtj.onrender.com";
 
  const x = {
   "attendance_summary": [

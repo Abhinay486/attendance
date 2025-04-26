@@ -9,6 +9,9 @@ function App() {
   const [showDiv, setShowDiv] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
+
+    const backendurl = "http://localhost:5000";
+
  const x = {
   "attendance_summary": [
     {
@@ -143,7 +146,7 @@ const AttendanceDisplay = ({ data }) => {
     setLoading(true);
     console.log("AA");
 
-    fetch(`/api/attendance?student_id=${roll}&password=${pass}`)
+    fetch(`${backendurl}/api/attendance?student_id=${roll}&password=${pass}`)
       .then(res => res.json())
       .then(json => {
         const attendanceData = json.attendance || json;

@@ -1,5 +1,6 @@
-/* App.css */
+/* App.css - Reorganized */
 
+/* Custom Properties (Variables) */
 :root {
     --primary: #7953d2;
     --primary-dark: #5e35b1;
@@ -20,7 +21,22 @@
     --radius: 12px;
     --input-radius: 8px;
   }
-  
+  /* Mobile input visibility fix */
+input[type="text"],
+input[type="password"] {
+  color: var(--text);
+  font-size: 16px; /* Prevents iOS zoom */
+  -webkit-appearance: none; /* Removes default styling on iOS */
+  appearance: none;
+}
+
+/* Ensure text remains visible during input on iOS */
+@media screen and (-webkit-min-device-pixel-ratio:0) { 
+  input[type="text"],
+  input[type="password"] {
+    font-size: 16px;
+  }
+}
   /* Base styles */
   * {
     box-sizing: border-box;
@@ -41,6 +57,17 @@
     line-height: 1.6;
   }
   
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
   /* Main container */
   .container {
     width: 100%;
@@ -51,6 +78,7 @@
     border-radius: var(--radius);
     margin: 1.5rem;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    animation: fadeUp 0.5s ease-out forwards;
   }
   
   .container:hover {
@@ -164,21 +192,17 @@
     transform: translateY(0);
   }
   
-  /* Attendance Data */
-  .attendance-summary {
-    padding: 1.5rem;
-    background-color: var(--primary-light);
-    border-radius: var(--radius);
-    margin-top: 2rem;
-    border: 1px solid rgba(121, 83, 210, 0.2);
-  }
-/* styles.css */
-
-@keyframes spin {
-    from { transform: rotate(0deg) }
-    to   { transform: rotate(360deg) }
+  button.close-btn {
+    background-color: var(--danger);
+    margin-top: 1.25rem;
   }
   
+  button.close-btn:hover {
+    background-color: var(--danger);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.25);
+  }
+  
+  /* Reload Button and Animation */
   .image-button {
     background: none;
     border: none;
@@ -198,9 +222,17 @@
     animation: spin 2s linear infinite;
   }
   
-  
-  
-  
+  /* Attendance Summary */
+  .attendance-summary {
+    padding: 1.5rem;
+    background-color: var(--primary-light);
+    border-radius: var(--radius);
+    margin-top: 2rem;
+    border: 1px solid rgba(121, 83, 210, 0.2);
+    animation: fadeUp 0.5s ease-out 0.1s forwards;
+    opacity: 0;
+    animation-fill-mode: both;
+  }
   
   .attendance-summary h3 {
     font-size: 1.125rem;
@@ -221,113 +253,8 @@
     border-bottom: none;
   }
   
-  /* Subject list */
-  .subject-list {
-    padding: 1.5rem;
-    background-color: var(--danger-light);
-    border: 1px solid rgba(244, 67, 54, 0.2);
-    border-radius: var(--radius);
-    margin-top: 1.5rem;
-  }
-  
-  .subject-list h3 {
-    color: var(--danger);
-    margin-bottom: 1rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-  }
-  
-  .subject-item {
-    padding: 0.875rem 1rem;
-    font-size: 0.9rem;
-    margin-bottom: 0.75rem;
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(244, 67, 54, 0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .subject-item:last-child {
-    margin-bottom: 0;
-  }
-  
-  button.close-btn {
-    background-color: var(--danger);
-    margin-top: 1.25rem;
-  }
-  
-  button.close-btn:hover {
-    background-color: var(--danger);
-    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.25);
-  }
-  
-  /* Badge for attendance percentage */
-  .attendance-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.25rem 0.625rem;
-    border-radius: 1rem;
-    background-color: var(--danger-light);
-    color: var(--danger);
-  }
-  
-  .attendance-badge.good {
-    background-color: rgba(76, 175, 80, 0.1);
-    color: var(--accent-dark);
-  }
-  
-  .attendance-badge.warning {
-    background-color: var(--warning-light);
-    color: var(--warning);
-  }
-  
-  /* Responsive design */
-  @media (max-width: 640px) {
-    body {
-      background: var(--card);
-    }
-    
-    .container {
-      padding: 1.75rem;
-      margin: 0;
-      max-width: 100%;
-      box-shadow: none;
-      border-radius: 0;
-    }
-    
-    h2 {
-      font-size: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    
-    input[type="text"],
-    input[type="password"] {
-      padding: 0.75rem 1rem;
-    }
-    
-    .attendance-summary,
-    .subject-list {
-      padding: 1.25rem;
-      border-radius: 10px;
-    }
-    
-    button {
-      padding: 0.875rem;
-    }
-  }
-  
-  /* Animation for elements */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
   /* Attendance percentage styling */
-.at {
+  .at {
     font-size: 1.5rem;
     font-weight: 700;
     text-align: center;
@@ -380,8 +307,122 @@
     font-weight: 500;
   }
   
-  /* For mobile devices */
+  /* Subject list */
+  .subject-list {
+    padding: 1.5rem;
+    background-color: var(--danger-light);
+    border: 1px solid rgba(244, 67, 54, 0.2);
+    border-radius: var(--radius);
+    margin-top: 1.5rem;
+    animation: fadeUp 0.5s ease-out 0.2s forwards;
+    opacity: 0;
+    animation-fill-mode: both;
+  }
+  
+  .subject-list h3 {
+    color: var(--danger);
+    margin-bottom: 1rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+  
+  .subject-item {
+    padding: 0.875rem 1rem;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(244, 67, 54, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .subject-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Badge for attendance percentage */
+  .attendance-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.625rem;
+    border-radius: 1rem;
+    background-color: var(--danger-light);
+    color: var(--danger);
+  }
+  
+  .attendance-badge.good {
+    background-color: rgba(76, 175, 80, 0.1);
+    color: var(--accent-dark);
+  }
+  
+  .attendance-badge.warning {
+    background-color: var(--warning-light);
+    color: var(--warning);
+  }
+  
+  /* Attendance Display Component */
+  .attendance-container {
+    padding-top: 6px;
+  }
+  
+  .subject-row {
+    padding: 6px;
+  }
+  
+  .subject-attendance-container {
+    display: flex;
+  }
+  
+  .subject-name {
+    padding-right: 8px;
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+  }
+  
+  .attendance-boxes {
+    display: flex;
+  }
+  
+  /* Responsive design */
   @media (max-width: 640px) {
+    body {
+      background: var(--card);
+    }
+    
+    .container {
+      padding: 1.75rem;
+      margin: 0;
+      max-width: 100%;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    input[type="text"],
+    input[type="password"] {
+      padding: 0.75rem 1rem;
+    }
+    
+    .attendance-summary,
+    .subject-list {
+      padding: 1.25rem;
+      border-radius: 10px;
+    }
+    
+    button {
+      padding: 0.875rem;
+    }
+    
     .at {
       padding: 1.2rem;
       font-size: 1.35rem;
@@ -390,19 +431,4 @@
     .at .percentage {
       font-size: 1.5rem;
     }
-  }
-  .container {
-    animation: fadeUp 0.5s ease-out forwards;
-  }
-  
-  .attendance-summary {
-    animation: fadeUp 0.5s ease-out 0.1s forwards;
-    opacity: 0;
-    animation-fill-mode: both;
-  }
-  
-  .subject-list {
-    animation: fadeUp 0.5s ease-out 0.2s forwards;
-    opacity: 0;
-    animation-fill-mode: both;
   }

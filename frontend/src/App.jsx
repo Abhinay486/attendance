@@ -1,265 +1,442 @@
 import { useEffect, useState } from 'react';
-import './App.css';
+import { RefreshCw, Eye, X, User, Calendar, ChevronRight, CheckCircle } from 'lucide-react';
 
-function App() {
-  const [data, setData] = useState(null);
-  const [roll, setRoll] = useState(localStorage.getItem("roll") || '');
-  const [pass, setPass] = useState(localStorage.getItem("pass") || '');
-  const [bool, setBool] = useState(true);
-  const [showDiv, setShowDiv] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isSpinning, setIsSpinning] = useState(false);
-
-    const backendurl = "https://attendance-4dtj.onrender.com";
-
- const x = {
-  "attendance_summary": [
-    {
-      "attendance_today": "PPPP",
-      "subject": "CRT"
-    },
-    {
-      "attendance_today": "AAPP",
-      "subject": "MEFA"
-    },
-    {
-      "attendance_today": "PP",
-      "subject": "ML"
-    }
-  ]
-};
-const AttendanceDisplay = ({ data }) => {
-    // Check if data is valid and contains attendance entries
-    const summary = data?.attendance_summary;
-    const hasAttendance = summary && !summary[0]?.message;
-  
+function AttendanceDisplay({ data }) {
+  // Updated to use attendance_summary instead of today_attendance
+  if (!data?.attendance_summary || !Array.isArray(data.attendance_summary) || data.attendance_summary.length === 0) {
     return (
-      <div className="attendance-container" style={{ paddingTop: '6px' }}>
-        {hasAttendance ? (
-          summary.map((item, index) => (
-            <div className="subject-row" key={index} style={{ padding: '6px' }}>
-              <div className="subject-attendance-container" style={{ display: 'flex' }}>
-                <div
-                  className="subject-name"
-                  style={{
-                    paddingRight: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {item.subject}
-                </div>
-  
-                <div className="attendance-boxes" style={{ display: 'flex' }}>
-                  {item.attendance_today.split('').map((char, i) => {
-                    const backgroundColor =
-                      char === 'P' ? '#7953D2' :
-                      char === 'A' ? '#cccccc' :
-                      '#f9fafb';
-  
-                    const textColor =
-                      char === 'P' ? '#FFFFFF' :
-                      char === 'A' ? '#000000' :
-                      '#374151';
-  
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          backgroundColor,
-                          color: textColor,
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '4px',
-                          padding: '6px',
-                          marginRight: '8px',
-                          width: '36px',
-                          height: '36px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {char}
-                      </div>
-                    );
-                  })}
+      <div className="text-center py-8 text-gray-500">
+        <Calendar className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+        <p>No attendance data for today.</p>
+      </div>
+    );
+  }
+
+  // Function to parse today's attendance string
+  const parseAttendanceString = (attendanceStr) => {
+    if (!attendanceStr) return [];
+    
+    const statusMap = {
+      'P': 'Present',
+      'A': 'Absent',
+      'L': 'Late',
+      'E': 'Excused'
+    };
+    
+    return attendanceStr.split('').map((char, index) => ({
+      period: index + 1,
+      status: statusMap[char] || 'Unknown',
+      char: char
+    }));
+  };
+
+  return (
+    <div className="space-y-4">
+      {data.attendance_summary.map((item, idx) => {
+        const todayAttendance = parseAttendanceString(item.attendance_today);
+        
+        return (
+          <div key={item.subject + idx} className="bg-white rounded-xl p-5 shadow border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="font-semibold text-gray-900 text-base md:text-lg">{item.subject}</h4>
+                <p className="text-gray-600 mt-1 text-sm md:text-base">
+                  Today's Sessions: {todayAttendance.length}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-500">Overall</div>
+                <div className="text-lg font-bold text-gray-900">
+                  {data.subjectwise_summary.find(s => s.subject_name === item.subject)?.percentage || 'N/A'}%
                 </div>
               </div>
             </div>
-          ))
-        ) : (
-          <div style={{ padding: '12px', fontStyle: 'italic', color: '#6b7280' }}>
-            {summary?.[0]?.message || 'No attendance data available.'}
+            
+            {todayAttendance.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {todayAttendance.map((session, sessionIdx) => (
+                  <div 
+                    key={sessionIdx}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                      session.status === 'Present' 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-red-100 text-red-700'
+                    }`}
+                    title={`Period ${session.period}: ${session.status}`}
+                  >
+                    {session.char}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    );
+        );
+      })}
+    </div>
+  );
+}
+
+function App() {
+  const [data, setData] = useState(null);
+  const [roll, setRoll] = useState('');
+  const [pass, setPass] = useState('');
+  const [showLogin, setShowLogin] = useState(true);
+  const [showBelow75, setShowBelow75] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fadeIn, setFadeIn] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchAttendance = async (student_id, password) => {
+    setError('');
+    try {
+      const res = await fetch(`https://congenial-space-happiness-4j746w96v4j7295w-5000.app.github.dev/api/attendance?student_id=${encodeURIComponent(student_id)}&password=${encodeURIComponent(password)}`);
+      if (!res.ok) throw new Error('Invalid credentials or server error');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setData(json);
+      setError('');
+      return true;
+    } catch (err) {
+      setError(err.message || 'Failed to fetch attendance');
+      setData(null);
+      return false;
+    }
   };
-  
-  
-//   const styles = {
-//     // Inline styles
-//     inline: {
-//       '@keyframes spin': {
-//         '0%': { transform: 'rotate(0deg)' },
-//         '100%': { transform: 'rotate(360deg)' }
-//       },
-//       buttonContainer: {
-//         display: 'inline-block',
-//       },
-//       imageButton: {
-//         background: 'none',
-//         border: 'none',
-//         cursor: 'pointer',
-//         padding: '10px',
-//         borderRadius: '4px',
-//         transition: 'background-color 0.3s',
-//       },
-//       buttonIcon: {
-//         width: '140px',
-//         height: '140px',
-//         transition: 'transform 0.3s',
-//       },
-//       spin: {
-//         animation: 'spin 2s linear infinite',
-//       },
-//     },
-  
-//   };
-  
+
   useEffect(() => {
-    const storedData = localStorage.getItem("attendanceData");
+    setFadeIn(true);
+    // Using in-memory storage instead of localStorage for Claude environment
+    const storedData = sessionStorage.getItem('attendanceCredentials');
     if (storedData) {
-      setData(JSON.parse(storedData));
-      setBool(false);
+      try {
+        const { storedRoll, storedPass } = JSON.parse(storedData);
+        if (storedRoll && storedPass) {
+          setRoll(storedRoll);
+          setPass(storedPass);
+          setShowLogin(false);
+          fetchAttendance(storedRoll, storedPass);
+        }
+      } catch (e) {
+        console.error('Error parsing stored credentials:', e);
+      }
     }
   }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!roll || !pass) {
-      alert('Please provide both Roll Number and Password.');
+      setError('Please provide both Roll Number and Password.');
       return;
     }
-
     setLoading(true);
-    console.log("AA");
-
-    fetch(`${backendurl}/api/attendance?student_id=${roll}&password=${pass}`)
-      .then(res => res.json())
-      .then(json => {
-        const attendanceData = json.attendance || json;
-        setData(attendanceData);
-        localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
-        setBool(false);
-      })
-      .catch(err => {
-        console.error("Fetch failed:", err);
-        setData("Failed to fetch data");
-      })
-      .finally(() => 
-      {
-        setLoading(false)
-        console.log("BB");
-      }
-    );
+    const ok = await fetchAttendance(roll, pass);
+    setLoading(false);
+    if (ok) {
+      setShowLogin(false);
+      // Store credentials in sessionStorage for this session
+      sessionStorage.setItem('attendanceCredentials', JSON.stringify({
+        storedRoll: roll,
+        storedPass: pass
+      }));
+    }
   };
 
-  const handleButtonClick = () => setShowDiv(true);
-  const handleCloseClick = () => setShowDiv(false);
+  const handleRefresh = async () => {
+    setLoading(true);
+    await fetchAttendance(roll, pass);
+    setLoading(false);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('attendanceCredentials');
+    setRoll('');
+    setPass('');
+    setData(null);
+    setShowLogin(true);
+    setError('');
+  };
+
+  const getAttendanceColor = (percentage) => {
+    const pct = parseFloat(percentage);
+    if (pct >= 85) return 'text-green-600';
+    if (pct >= 75) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getAttendanceBg = (percentage) => {
+    const pct = parseFloat(percentage);
+    if (pct >= 85) return 'bg-green-50 border-green-200';
+    if (pct >= 75) return 'bg-yellow-50 border-yellow-200';
+    return 'bg-red-50 border-red-200';
+  };
+
+  // Check if there are any subjects below 75%
+  const hasSubjectsBelow75 = data?.subjectwise_summary?.some(subject => parseFloat(subject.percentage) < 75) || false;
+
+  // Derived values for progress bar and hero section
+  const attendancePercentage = data?.total_info?.total_percentage || 0;
+  const isGoodAttendance = attendancePercentage >= 75;
 
   return (
-    <div className="container">
-  {bool ? (
-    <>
-      <div className="form-group">
-        <label htmlFor="roll">Roll Number</label>
-        <input
-          type="text"
-          id="roll"
-          value={roll}
-          onChange={(e) => {
-            setRoll(e.target.value);
-            localStorage.setItem("roll", e.target.value);
-          }}
-          placeholder="Enter Roll Number"
-        />
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className={`container mx-auto px-2 md:px-4 py-6 md:py-8 transition-all duration-700 ${fadeIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        {/* Header */}
+        <div className="text-center mb-8 md:mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 tracking-tight">
+            Attendance
+          </h1>
+          <p className="text-base md:text-lg text-gray-600 max-w-xl mx-auto leading-relaxed">
+            Track your academic progress with precision and clarity
+          </p>
+        </div>
 
-      <div className="form-group">
-        <label htmlFor="pass">Password</label>
-        <input
-          type="password"
-          id="pass"
-          value={pass}
-          onChange={(e) => {
-            setPass(e.target.value);
-            localStorage.setItem("pass", e.target.value);
-          }}
-          placeholder="Enter Password"
-        />
-      </div>
-
-      <button onClick={handleSubmit}>{loading ? 'Loading...' : 'Submit'}</button>
-    </>
-  ) : null}
-
-  {data && (
-    <>
-<button
-      className="image-button btn"
-      onClick={handleSubmit}
-      aria-label="Reload"
-    >
-      <img
-        src="data:image/jpeg;base64,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"
-        alt="Reload"
-        className={
-          loading
-            ? 'button-icon spin'
-            : 'button-icon'
-        }
-      />
-    </button>
-      <div className="attendance-summary">
-        {typeof data === 'string' ? (
-          <p>{data}</p>
-        ) : (
-          <>
-            <p className="at">
-              {data.total_info?.total_percentage || 'N/A'}%
-              {' '}({data.total_info?.total_held || 'N/A'} / {data.total_info?.total_attended || 'N/A'})
-            </p>
-          </>
+        {error && (
+          <div className="mb-4 md:mb-6 text-center text-red-600 font-medium bg-red-50 border border-red-200 rounded-xl py-2 px-3 md:py-3 md:px-4">
+            {error}
+          </div>
         )}
 
-        <button onClick={() => setBool(true)}>Change</button>
-        <button onClick={handleButtonClick}>View below 75%</button>
-
-        {showDiv && (
-          <div className="subject-list">
-            {data.subjectwise_summary?.map((e, idx) =>
-              parseFloat(e.percentage) < 75 ? (
-                <div key={idx} className="subject-item">
-                  <span>{e.subject_name}</span>
-                  <span className="attendance-badge warning">{e.percentage}%</span>
+        {showLogin ? (
+          <div className="max-w-md mx-auto">
+            <div className="bg-white rounded-3xl p-6 md:p-8 shadow border border-gray-100">
+              <div className="text-center mb-6 md:mb-8">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-black rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4">
+                  <User className="w-6 h-6 md:w-7 md:h-7 text-white" />
                 </div>
-              ) : null
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-1 md:mb-2">Welcome</h2>
+                <p className="text-gray-600 text-sm md:text-base">Sign in to continue</p>
+              </div>
+              <div className="space-y-4 md:space-y-5">
+                <input
+                  type="text"
+                  value={roll}
+                  onChange={e => setRoll(e.target.value)}
+                  placeholder="Roll Number"
+                  className="w-full px-4 py-2 md:px-5 md:py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200 text-base placeholder-gray-400"
+                  onKeyPress={e => e.key === 'Enter' && handleSubmit()}
+                />
+                <input
+                  type="password"
+                  value={pass}
+                  onChange={e => setPass(e.target.value)}
+                  placeholder="Password"
+                  className="w-full px-4 py-2 md:px-5 md:py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all duration-200 text-base placeholder-gray-400"
+                  onKeyPress={e => e.key === 'Enter' && handleSubmit()}
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="w-full bg-black text-white font-semibold py-2 md:py-3 px-4 md:px-5 rounded-xl hover:bg-gray-800 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-base flex items-center justify-center"
+                >
+                  {loading ? <RefreshCw className="w-5 h-5 animate-spin mr-2" /> : null}
+                  {loading ? 'Signing in...' : 'Continue'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto space-y-5 md:space-y-6">
+            {/* Stats Overview */}
+            <div className="bg-white rounded-3xl p-4 md:p-6 shadow border border-gray-100">
+              <div className="flex flex-col md:flex-row items-center justify-between mb-4 md:mb-6 gap-3 md:gap-0">
+                <div className="text-center md:text-left">
+                  <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">Overview</h2>
+                  <p className="text-gray-600 text-sm md:text-base">Your attendance summary</p>
+                  {data?.roll_number && (
+                    <p className="text-gray-500 text-xs md:text-sm mt-1">Roll: {data.roll_number}</p>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 md:space-x-3">
+                  <button
+                    onClick={handleRefresh}
+                    disabled={loading}
+                    className="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all duration-200 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-5 h-5 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-2 md:px-4 md:py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all duration-200 font-medium text-gray-700"
+                  >
+                    Switch User
+                  </button>
+                </div>
+              </div>
+              {/* Main Content */}
+              {data?.total_info && (
+                <div className="p-8">
+                  {/* Attendance Percentage - Hero Section */}
+                  <div className="text-center mb-8">
+                    <div className={`inline-flex items-center justify-center w-36 h-36 rounded-full text-white mb-4 ${
+                      isGoodAttendance ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'
+                    }`}>
+                      <span className="text-4xl font-bold p-2">
+                        {attendancePercentage}%
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-800 mb-2">Overall Attendance Rate</h3>
+                    <p className={`text-lg font-semibold ${
+                      isGoodAttendance ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {isGoodAttendance ? 'Excellent Attendance!' : 'Needs Improvement'}
+                    </p>
+                  </div>
+
+                  {/* Statistics Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Classes Attended */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="bg-green-500 p-2 rounded-lg">
+                          <CheckCircle className="text-white" size={24} />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800">Classes Attended</h4>
+                          <p className="text-sm text-gray-600">Present in class</p>
+                        </div>
+                      </div>
+                      <div className="text-3xl font-bold text-green-600">
+                        {data.total_info.total_attended}
+                      </div>
+                    </div>
+
+                    {/* Total Classes */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="bg-blue-500 p-2 rounded-lg">
+                          <Calendar className="text-white" size={24} />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-800">Total Classes</h4>
+                          <p className="text-sm text-gray-600">Classes conducted</p>
+                        </div>
+                      </div>
+                      <div className="text-3xl font-bold text-blue-600">
+                        {data.total_info.total_held}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="mt-8">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium text-gray-700">Attendance Progress</span>
+                      <span className="text-sm font-medium text-gray-700">{attendancePercentage}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className={`h-3 rounded-full transition-all duration-500 ${
+                          isGoodAttendance ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gradient-to-r from-red-500 to-rose-500'
+                        }`}
+                        style={{ width: `${Math.min(attendancePercentage, 100)}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>0%</span>
+                      <span className="text-orange-600 font-medium">75% (Required)</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Button - Only show if there are subjects below 75% */}
+            {hasSubjectsBelow75 && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setShowBelow75(!showBelow75)}
+                  className="bg-white rounded-2xl px-5 py-2 md:px-6 md:py-3 shadow border border-gray-100 hover:shadow transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Eye className="w-5 h-5 text-gray-600" />
+                    <span className="font-medium text-gray-900 text-base">
+                      {showBelow75 ? 'Hide' : 'View'} Low Attendance
+                    </span>
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  </div>
+                </button>
+              </div>
             )}
-            <button className="close-btn" onClick={handleCloseClick}>Close</button>
+
+            {/* Below 75% Alert */}
+            {showBelow75 && data?.subjectwise_summary && (
+              <div className="bg-white rounded-3xl p-4 md:p-6 shadow border border-red-200">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <div>
+                    <h3 className="text-base md:text-lg font-bold text-red-600 mb-1">Attention Required</h3>
+                    <p className="text-gray-600 text-xs md:text-base">Subjects below 75% attendance threshold</p>
+                  </div>
+                  <button
+                    onClick={() => setShowBelow75(false)}
+                    className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+                <div className="grid gap-2 md:gap-3">
+                  {data.subjectwise_summary
+                    .filter(subject => parseFloat(subject.percentage) < 75)
+                    .map((subject, idx) => (
+                      <div key={subject.subject_name + idx} className={`${getAttendanceBg(subject.percentage)} border rounded-xl p-3 md:p-4 flex items-center justify-between`}>
+                        <div>
+                          <h4 className="font-semibold text-gray-900 text-sm md:text-base">{subject.subject_name}</h4>
+                          <p className="text-gray-600 mt-1 text-xs md:text-sm">
+                            {subject.attended_held} - Needs improvement
+                          </p>
+                        </div>
+                        <div className={`${getAttendanceColor(subject.percentage)} text-base md:text-lg font-bold`}>
+                          {subject.percentage}%
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+           
+            {/* Today's Attendance */}
+            <div className="bg-white rounded-3xl p-4 md:p-6 shadow border border-gray-100">
+              <div className="mb-4 md:mb-6">
+                <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">Today's Attendance</h2>
+                <p className="text-gray-600 text-sm md:text-base">Current session attendance breakdown</p>
+              </div>
+              {data ? <AttendanceDisplay data={data} /> : (
+                <div className="text-center py-6 md:py-10">
+                  <div className="animate-pulse">
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-200 rounded-2xl mx-auto mb-2"></div>
+                    <div className="h-2 md:h-3 bg-gray-200 rounded w-24 md:w-32 mx-auto"></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Subject-wise Summary */}
+            {data?.subjectwise_summary && (
+              <div className="bg-white rounded-3xl p-4 md:p-6 shadow border border-gray-100">
+                <div className="mb-4 md:mb-6">
+                  <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">Subject-wise Summary</h2>
+                  <p className="text-gray-600 text-sm md:text-base">Detailed attendance breakdown by subject</p>
+                </div>
+                <div className="grid gap-3 md:gap-4">
+                  {data.subjectwise_summary.map((subject, idx) => (
+                    <div key={subject.subject_name + idx} className={`${getAttendanceBg(subject.percentage)} border rounded-xl p-3 md:p-4 flex items-center justify-between`}>
+                      <div>
+                        <h4 className="font-semibold text-gray-900 text-sm md:text-base">{subject.subject_name}</h4>
+                        <p className="text-gray-600 mt-1 text-xs md:text-sm">
+                          Attended: {subject.attended_held}
+                        </p>
+                      </div>
+                      <div className={`${getAttendanceColor(subject.percentage)} text-base md:text-lg font-bold`}>
+                        {subject.percentage}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
-
-    </>
-  )}
-  <div>
-  {data ? <AttendanceDisplay data={data} /> : <></>}
-</div>
-
-</div>
-
+    </div>
   );
 }
 

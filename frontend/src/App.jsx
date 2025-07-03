@@ -85,11 +85,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
   const [error, setError] = useState('');
-
+const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
   const fetchAttendance = async (student_id, password) => {
     setError('');
     try {
-      const res = await fetch(`https://congenial-space-happiness-4j746w96v4j7295w-5000.app.github.dev/api/attendance?student_id=${encodeURIComponent(student_id)}&password=${encodeURIComponent(password)}`);
+      const res = await fetch(`${backendUrl}?student_id=${encodeURIComponent(student_id)}&password=${encodeURIComponent(password)}`);
       if (!res.ok) throw new Error('Invalid credentials or server error');
       const json = await res.json();
       if (json.error) throw new Error(json.error);

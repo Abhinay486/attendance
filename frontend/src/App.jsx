@@ -85,40 +85,115 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fadeIn, setFadeIn] = useState(false);
   const [error, setError] = useState('');
-const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
+  const [isOffline, setIsOffline] = useState(false);
+
+  const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
+
+  // Storage helper functions with fallback
+  const setStorage = (key, value) => {
+    try {
+      if (typeof Storage !== 'undefined' && localStorage) {
+        localStorage.setItem(key, JSON.stringify(value));
+      } else {
+        // Fallback to sessionStorage for Claude.ai environment
+        sessionStorage.setItem(key, JSON.stringify(value));
+      }
+    } catch (error) {
+      console.warn('Storage not available:', error);
+    }
+  };
+
+  const getStorage = (key) => {
+    try {
+      if (typeof Storage !== 'undefined' && localStorage) {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+      } else {
+        // Fallback to sessionStorage for Claude.ai environment
+        const item = sessionStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+      }
+    } catch (error) {
+      console.warn('Storage not available:', error);
+      return null;
+    }
+  };
+
+  const removeStorage = (key) => {
+    try {
+      if (typeof Storage !== 'undefined' && localStorage) {
+        localStorage.removeItem(key);
+      } else {
+        // Fallback to sessionStorage for Claude.ai environment
+        sessionStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.warn('Storage not available:', error);
+    }
+  };
+
   const fetchAttendance = async (student_id, password) => {
     setError('');
+    setIsOffline(false);
     try {
       const res = await fetch(`${backendUrl}?student_id=${encodeURIComponent(student_id)}&password=${encodeURIComponent(password)}`);
       if (!res.ok) throw new Error('Invalid credentials or server error');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      
+      // Store both credentials and attendance data
+      setStorage('attendanceCredentials', {
+        storedRoll: student_id,
+        storedPass: password
+      });
+      setStorage('attendanceData', {
+        data: json,
+        timestamp: Date.now()
+      });
+      
       setData(json);
       setError('');
       return true;
     } catch (err) {
       setError(err.message || 'Failed to fetch attendance');
-      setData(null);
+      
+      // If fetch fails, try to load cached data
+      const cachedData = getStorage('attendanceData');
+      if (cachedData) {
+        setData(cachedData.data);
+        setIsOffline(true);
+        const cacheAge = Math.floor((Date.now() - cachedData.timestamp) / (1000 * 60 * 60)); // hours
+        setError(`Using cached data (${cacheAge} hours old) - Check connection and refresh`);
+      } else {
+        setData(null);
+      }
       return false;
     }
   };
 
   useEffect(() => {
     setFadeIn(true);
-    // Using in-memory storage instead of localStorage for Claude environment
-    const storedData = sessionStorage.getItem('attendanceCredentials');
-    if (storedData) {
-      try {
-        const { storedRoll, storedPass } = JSON.parse(storedData);
-        if (storedRoll && storedPass) {
-          setRoll(storedRoll);
-          setPass(storedPass);
-          setShowLogin(false);
-          fetchAttendance(storedRoll, storedPass);
+    
+    // Try to load stored credentials and data
+    const storedCredentials = getStorage('attendanceCredentials');
+    const storedData = getStorage('attendanceData');
+    
+    if (storedCredentials && storedCredentials.storedRoll && storedCredentials.storedPass) {
+      setRoll(storedCredentials.storedRoll);
+      setPass(storedCredentials.storedPass);
+      setShowLogin(false);
+      
+      // If we have cached data, show it immediately
+      if (storedData && storedData.data) {
+        setData(storedData.data);
+        const cacheAge = Math.floor((Date.now() - storedData.timestamp) / (1000 * 60 * 60)); // hours
+        if (cacheAge > 0) {
+          setError(`Showing cached data (${cacheAge} hours old) - Refreshing...`);
         }
-      } catch (e) {
-        console.error('Error parsing stored credentials:', e);
       }
+      
+      // Then try to fetch fresh data
+      fetchAttendance(storedCredentials.storedRoll, storedCredentials.storedPass);
     }
   }, []);
 
@@ -132,11 +207,6 @@ const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
     setLoading(false);
     if (ok) {
       setShowLogin(false);
-      // Store credentials in sessionStorage for this session
-      sessionStorage.setItem('attendanceCredentials', JSON.stringify({
-        storedRoll: roll,
-        storedPass: pass
-      }));
     }
   };
 
@@ -147,12 +217,15 @@ const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('attendanceCredentials');
+    // Clear all stored data
+    removeStorage('attendanceCredentials');
+    removeStorage('attendanceData');
     setRoll('');
     setPass('');
     setData(null);
     setShowLogin(true);
     setError('');
+    setIsOffline(false);
   };
 
   const getAttendanceColor = (percentage) => {
@@ -189,8 +262,17 @@ const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
           </p>
         </div>
 
+        {/* Offline/Cache Status */}
+        {isOffline && (
+          <div className="mb-4 md:mb-6 text-center text-orange-600 font-medium bg-orange-50 border border-orange-200 rounded-xl py-2 px-3 md:py-3 md:px-4">
+            📱 Offline Mode - Using cached data
+          </div>
+        )}
+
         {error && (
-          <div className="mb-4 md:mb-6 text-center text-red-600 font-medium bg-red-50 border border-red-200 rounded-xl py-2 px-3 md:py-3 md:px-4">
+          <div className={`mb-4 md:mb-6 text-center font-medium rounded-xl py-2 px-3 md:py-3 md:px-4 ${
+            isOffline ? 'text-orange-600 bg-orange-50 border border-orange-200' : 'text-red-600 bg-red-50 border border-red-200'
+          }`}>
             {error}
           </div>
         )}

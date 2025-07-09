@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Users, Star, TrendingUp, RotateCcw } from 'lucide-react';
+import { useState, useEffect, Fragment } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
+import { ChevronDown, ChevronUp, Users, Star, TrendingUp, RotateCcw, Trash2 } from 'lucide-react';
 
 const FriendsAttendance = () => {
   const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
@@ -113,14 +114,12 @@ const FriendsAttendance = () => {
     setAttendanceMap(prev => ({ ...prev, [friend.roll]: perc }));
   };
 
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   return (
     <div className="max-w-2xl rounded-5xl mx-auto mt-10 mb-8 px-2 md:px-0">
       <div className="relative bg-white rounded-lg border border-gray-200 shadow-lg">
-        <button
-          onClick={() => setOpen(!open)}
-          className="w-full flex items-center justify-between px-4 md:px-6 py-4 md:py-6 text-left hover:bg-gray-100 transition-all duration-300 rounded-t-lg"
-          aria-label="Toggle friends attendance"
-        >
+        <div className="flex items-center justify-between px-4 md:px-6 py-4 md:py-6">
           <div className="flex items-center">
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-200 rounded-full flex items-center justify-center shadow-md mr-3 md:mr-5">
               <Users className="w-5 h-5 md:w-6 md:h-6 text-gray-700" />
@@ -130,19 +129,85 @@ const FriendsAttendance = () => {
               <p className="text-gray-500 text-xs md:text-sm mt-1">See how your squad is doing</p>
             </div>
           </div>
-          <div className="flex items-center">
-            <div className="px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 rounded-full text-white font-medium text-xs md:text-sm mr-2 md:mr-3">
-              {open ? 'Hide' : 'Show'}
-            </div>
-            <div className="w-7 h-7 md:w-8 md:h-8 bg-gray-100 rounded-full flex items-center justify-center border border-gray-300">
-              {open ? (
-                <ChevronUp className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
-              ) : (
-                <ChevronDown className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
-              )}
-            </div>
+          <div className="flex items-center gap-7">
+            <button
+              className="ml-2 px-2 py-1 text-md bg-red-100 hover:bg-red-200 text-red-700 rounded flex items-center justify-center"
+              title="Delete all friends"
+              onClick={() => setDeleteDialogOpen(true)}
+              type="button"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            {/* Headless UI Dialog for delete confirmation */}
+            <Transition.Root show={deleteDialogOpen} as={Fragment}>
+              <Dialog as="div" className="relative z-50" onClose={setDeleteDialogOpen}>
+                <Transition.Child
+                  as={Fragment}
+                  enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+                  leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
+                >
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+                </Transition.Child>
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                  <div className="flex min-h-full items-center justify-center p-4 text-center">
+                    <Transition.Child
+                      as={Fragment}
+                      enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                      leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+                    >
+                      <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                        <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                          Delete All Friends
+                        </Dialog.Title>
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-500">
+                            Are you sure you want to delete all friends. This action cannot be undone.
+                          </p>
+                        </div>
+                        <div className="mt-4 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
+                            onClick={() => setDeleteDialogOpen(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none"
+                            onClick={() => {
+                              setFriends([]);
+                              setAttendanceMap({});
+                              localStorage.removeItem('friends');
+                              localStorage.removeItem('friendsAttendance');
+                              setDeleteDialogOpen(false);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </Dialog.Panel>
+                    </Transition.Child>
+                  </div>
+                </div>
+              </Dialog>
+            </Transition.Root>
+            <button
+              onClick={() => setOpen(!open)}
+              className="flex items-center justify-center px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 rounded-full text-white font-medium text-xs md:text-sm"
+              aria-label="Toggle friends attendance"
+            >
+             <p> {open ? 'Hide' : 'Show'}</p>
+              <span className="ml-2 flex items-center justify-center">
+                {open ? (
+                  <ChevronUp className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 md:w-5 md:h-5 text-white" />
+                )}
+              </span>
+            </button>
           </div>
-        </button>
+        </div>
         {/* Add Friend Button */}
         {open && (
         <div>

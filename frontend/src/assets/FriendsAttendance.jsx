@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Users, Star, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Users, Star, TrendingUp, RotateCcw } from 'lucide-react';
 
 const FriendsAttendance = () => {
   const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
@@ -10,7 +10,12 @@ const FriendsAttendance = () => {
       const password = decode(encodedPassword || "");
       const res = await fetch(`${backendUrl}?student_id=${encodeURIComponent(roll)}&password=${encodeURIComponent(password)}`);
       const data = await res.json();
-      // Try to extract percentage from subjectwise_summary[0]
+      console.log(data);
+      // Prefer total_info.total_percentage if available
+      if (data && data.total_info && data.total_info.total_percentage) {
+        return data.total_info.total_percentage;
+      }
+      // fallback: try percentage from subjectwise_summary[0]
       if (
         data &&
         Array.isArray(data.subjectwise_summary) &&
@@ -18,10 +23,6 @@ const FriendsAttendance = () => {
         data.subjectwise_summary[0].percentage
       ) {
         return data.subjectwise_summary[0].percentage;
-      }
-      // fallback: try total_info.total_percentage
-      if (data && data.total_info && data.total_info.total_percentage) {
-        return data.total_info.total_percentage;
       }
       return null;
     } catch (error) {
@@ -45,25 +46,20 @@ const FriendsAttendance = () => {
   });
 
   // Store attendance percentages for each friend by roll
-  const [attendanceMap, setAttendanceMap] = useState({});
+  const [attendanceMap, setAttendanceMap] = useState(() => {
+    // Load from localStorage if available
+    try {
+      const stored = localStorage.getItem("friendsAttendance");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
 
-  // Fetch attendance for all friends when list changes or when opened
+  // Save attendanceMap to localStorage whenever it changes
   useEffect(() => {
-    if (!open || friends.length === 0) return;
-    let cancelled = false;
-    const fetchAll = async () => {
-      const results = {};
-      await Promise.all(
-        friends.map(async (friend) => {
-          const perc = await fetchSingleAttendance(friend.roll, friend.password);
-          results[friend.roll] = perc;
-        })
-      );
-      if (!cancelled) setAttendanceMap(results);
-    };
-    fetchAll();
-    return () => { cancelled = true; };
-  }, [open, friends]);
+    localStorage.setItem("friendsAttendance", JSON.stringify(attendanceMap));
+  }, [attendanceMap]);
 
   // Simple base64 encode/decode helpers
   function encode(str) {
@@ -82,16 +78,15 @@ const FriendsAttendance = () => {
   }
 
   // Add friend handler
-  const handleAddFriend = (e) => {
+  const handleAddFriend = async (e) => {
     e.preventDefault();
     if (!roll || !password) return;
-    // Check for duplicate roll
     if (friends.some(f => f.roll === roll)) {
       alert("This roll number is already added.");
       return;
     }
     const newFriend = {
-      name: roll, // You can fetch/display name from backend if needed
+      name: roll,
       attendance: 0,
       streak: 0,
       avatar: '👤',
@@ -105,6 +100,17 @@ const FriendsAttendance = () => {
     setRoll("");
     setPassword("");
     setShowAdd(false);
+    // Fetch attendance for the new friend immediately
+    setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: null })); // show loading
+    const perc = await fetchSingleAttendance(newFriend.roll, newFriend.password);
+    setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: perc }));
+  };
+
+  // Refresh attendance for a single friend
+  const handleRefresh = async (friend) => {
+    setAttendanceMap(prev => ({ ...prev, [friend.roll]: null })); // show loading
+    const perc = await fetchSingleAttendance(friend.roll, friend.password);
+    setAttendanceMap(prev => ({ ...prev, [friend.roll]: perc }));
   };
 
   return (
@@ -135,9 +141,7 @@ const FriendsAttendance = () => {
                 <ChevronDown className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
               )}
             </div>
-
           </div>
-
         </button>
         {/* Add Friend Button */}
         {open && (
@@ -204,12 +208,20 @@ const FriendsAttendance = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-center justify-end mb-1 md:mb-2">
+                          <div className="flex items-center justify-end mb-1 md:mb-2 gap-2">
                             <span className="text-xl md:text-2xl font-bold text-gray-900">
                               {attendanceMap[friend.roll] !== undefined && attendanceMap[friend.roll] !== null
                                 ? `${attendanceMap[friend.roll]}%`
                                 : <span className="text-gray-400 text-base">...</span>}
                             </span>
+                            <button
+                              className="ml-2 p-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded flex items-center justify-center"
+                              title="Refresh attendance"
+                              onClick={() => handleRefresh(friend)}
+                              type="button"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
                           </div>
                           {/* Progress bar */}
                           <div className="w-12 md:w-16 h-2 bg-gray-200 rounded-full overflow-hidden">

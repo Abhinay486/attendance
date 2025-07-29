@@ -267,7 +267,7 @@ function App() {
     const current = parseFloat(attendancePercentage);
     const previous = parseFloat(previousAttendance);
     
-    if (current > previous) return 'up';
+    if (current >= previous) return 'up';
     if (current < previous) return 'down';
     return 'same';
   };

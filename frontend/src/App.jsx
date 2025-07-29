@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Eye, X, User, Calendar, ChevronRight, CheckCircle, Zap } from 'lucide-react';
+import { RefreshCw, Eye, X, User, Calendar, ChevronRight, CheckCircle, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import Sample from './assets/Sample';
 import FriendsAttendance from './assets/FriendsAttendance';
 function AttendanceDisplay({ data }) {
@@ -87,6 +87,8 @@ function App() {
   const [fadeIn, setFadeIn] = useState(false);
   const [error, setError] = useState('');
   const [friendsAttendance, setFriendsAttendance] = useState(false);
+  const [previousAttendance, setPreviousAttendance] = useState(null);
+  const [lastFetchTime, setLastFetchTime] = useState(null);
   const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
     const x = localStorage.getItem('attendanceCredentials');
     const y = localStorage.getItem('attendanceData');
@@ -136,6 +138,12 @@ function App() {
       if (!res.ok) throw new Error('Invalid credentials or server error');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      
+      // Store previous attendance percentage before updating
+      if (data?.total_info?.total_percentage) {
+        setPreviousAttendance(parseFloat(data.total_info.total_percentage));
+      }
+      
       setStorage('attendanceCredentials', {
         storedRoll: student_id,
         storedPass: password
@@ -146,6 +154,7 @@ function App() {
       });
       setData(json);
       setError('');
+      setLastFetchTime(Date.now());
       return true;
     } catch (err) {
       setError(err.message || 'Failed to fetch attendance');
@@ -177,6 +186,7 @@ function App() {
       // If we have cached data, show it immediately
       if (storedData && storedData.data) {
         setData(storedData.data);
+        setLastFetchTime(storedData.timestamp);
         const cacheAge = Math.floor((Date.now() - storedData.timestamp) / (1000 * 60 * 60)); // hours
         if (cacheAge > 0) {
           setError(`Showing cached data (${cacheAge} hours old) - Refreshing...`);
@@ -187,6 +197,18 @@ function App() {
       fetchAttendance(storedCredentials.storedRoll, storedCredentials.storedPass);
     }
   }, []);
+
+  // Update time display every 30 seconds
+  useEffect(() => {
+    if (!lastFetchTime) return;
+    
+    const interval = setInterval(() => {
+      // Force re-render to update the time ago display
+      setLastFetchTime(prev => prev);
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [lastFetchTime]);
 
   const handleSubmit = async () => {
     if (!roll || !pass) {
@@ -238,21 +260,69 @@ function App() {
   // Derived values for progress bar and hero section
   const attendancePercentage = data?.total_info?.total_percentage || 0;
   const isGoodAttendance = attendancePercentage >= 75;
+  
+  // Calculate attendance trend
+  const getAttendanceTrend = () => {
+    if (previousAttendance === null) return null;
+    const current = parseFloat(attendancePercentage);
+    const previous = parseFloat(previousAttendance);
+    
+    if (current > previous) return 'up';
+    if (current < previous) return 'down';
+    return 'same';
+  };
+  
+  const attendanceTrend = getAttendanceTrend();
+  
+  // Format time ago function
+  const getTimeAgo = (timestamp) => {
+    if (!timestamp) return null;
+    
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return diffInSeconds <= 1 ? 'just now' : `${diffInSeconds}s ago`;
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}min ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours}hr ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}day${diffInDays > 1 ? 's' : ''} ago`;
+  };
   return (
     <div className="min-h-screen bg-gray-50">
       <div className={`container mx-auto px-2 md:px-4 py-6 md:py-8 transition-all duration-700 ${fadeIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+        
+        
         {/* Header */}
         <div className="text-center mb-8 md:mb-10">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 tracking-tight">
             Attendance
           </h1>
+          
           <p className="text-base md:text-lg text-gray-600 max-w-xl mx-auto leading-relaxed">
             Track your academic progress with precision and clarity
           </p>
         </div>
 
   
-
+{/* Last Fetch Time - Only show when logged in */}
+        {!showLogin && lastFetchTime && (
+          <div className="text-end mb-3">
+            <p className="text-xs text-gray-400 font-mono tracking-wide">
+              Last updated {getTimeAgo(lastFetchTime)}
+            </p>
+          </div>
+        )}
         {showLogin ? (
           <div className="max-w-md mx-auto">
             <div className="bg-white rounded-3xl p-6 md:p-8 shadow border border-gray-100">
@@ -384,7 +454,15 @@ function App() {
                   <div className="mt-8">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-gray-700">Attendance Progress</span>
-                      <span className="text-sm font-medium text-gray-700">{attendancePercentage}%</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium text-gray-700">{attendancePercentage}%</span>
+                        {attendanceTrend === 'up' && (
+                          <TrendingUp className="w-4 h-4 text-green-600" />
+                        )}
+                        {attendanceTrend === 'down' && (
+                          <TrendingDown className="w-4 h-4 text-red-600" />
+                        )}
+                      </div>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3 relative">
                       {/* Progress bar */}

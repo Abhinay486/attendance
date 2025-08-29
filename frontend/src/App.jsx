@@ -134,7 +134,7 @@ function App() {
   const fetchAttendance = async (student_id, password) => {
     setError('');
     try {
-      const res = await fetch(`${backendUrl}?student_id=${encodeURIComponent(student_id)}&password=${encodeURIComponent(password)}`);
+      const res = await fetch(`${backendUrl}?student_id=${(student_id)}&password=${encodeURIComponent(password)}`);
       if (!res.ok) throw new Error('Invalid credentials or server error');
       const json = await res.json();
       if (json.error) throw new Error(json.error);

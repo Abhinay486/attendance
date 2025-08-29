@@ -13,7 +13,10 @@ app.use(express.json());
 
 app.get('/api/attendance', async (req, res) => {
   const { student_id, password } = req.query;
-
+  console.log(req.query) // {
+  student_id : "".
+    
+}
   if (!student_id || !password) {
     return res.status(400).json({ error: 'Missing student_id or password' });
   }

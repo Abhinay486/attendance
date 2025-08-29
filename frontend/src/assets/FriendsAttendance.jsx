@@ -5,32 +5,112 @@ import { ChevronDown, ChevronUp, Users, Star, TrendingUp, RotateCcw, Trash2 } fr
 const FriendsAttendance = () => {
   const backendUrl = 'https://attendance-4dtj.onrender.com/api/attendance';
   // Fetch attendance percentage for a single friend (using their roll and password)
-  const fetchSingleAttendance = async (roll, encodedPassword) => {
+  // (Replaced by fetchAttendanceData + getPercentageFromData)
+
+  // Generic fetch to get full attendance payload for a friend
+  const fetchAttendanceData = async (roll, encodedPassword) => {
     try {
-      // Decode the friend's password
       const password = decode(encodedPassword || "");
       const res = await fetch(`${backendUrl}?student_id=${encodeURIComponent(roll)}&password=${encodeURIComponent(password)}`);
       const data = await res.json();
-      console.log(data);
-      // Prefer total_info.total_percentage if available
-      if (data && data.total_info && data.total_info.total_percentage) {
-        return data.total_info.total_percentage;
-      }
-      // fallback: try percentage from subjectwise_summary[0]
-      if (
-        data &&
-        Array.isArray(data.subjectwise_summary) &&
-        data.subjectwise_summary.length > 0 &&
-        data.subjectwise_summary[0].percentage
-      ) {
-        return data.subjectwise_summary[0].percentage;
-      }
-      return null;
+      return data;
     } catch (error) {
-      console.error("Error fetching attendance:", error);
+      console.error("Error fetching attendance data:", error);
       return null;
     }
-  }
+  };
+
+  // Extract total percentage from payload
+  const getPercentageFromData = (data) => {
+    if (!data) return null;
+    if (data.total_info && data.total_info.total_percentage != null) return data.total_info.total_percentage;
+    if (Array.isArray(data.subjectwise_summary) && data.subjectwise_summary[0]?.percentage != null) return data.subjectwise_summary[0].percentage;
+    return null;
+  };
+
+  // Compute streak from attendance payload
+  const computeStreakFromData = (data) => {
+    if (!data) return 0;
+    let days = [];
+    if (Array.isArray(data.attendance_history)) days = data.attendance_history;
+    else if (Array.isArray(data.attendance_summary)) days = data.attendance_summary;
+    else return 0;
+
+  const isNonWorking = (entry) => typeof entry?.message === 'string' && /attendance\s+is\s+not\s+posted/i.test(entry.message);
+    const extractStatuses = (entry) => {
+      // Common shapes: { periods: [{status:'P'}|"P", ...] } or { period_wise: [...] } or object with period values
+      let periods = [];
+      if (Array.isArray(entry?.periods)) periods = entry.periods;
+      else if (Array.isArray(entry?.period_wise)) periods = entry.period_wise;
+      else if (Array.isArray(entry?.details)) periods = entry.details;
+      else if (entry && typeof entry === 'object') {
+        // Try to pull any array-like property that contains objects/strings with statuses
+        const maybe = Object.values(entry).find(v => Array.isArray(v) && v.length && (typeof v[0] === 'string' || typeof v[0] === 'object'));
+        if (maybe) periods = maybe;
+      }
+    const statuses = periods
+        .map(p => {
+          if (typeof p === 'string') return p.toUpperCase();
+          if (!p || typeof p !== 'object') return null;
+          const s = p.status ?? p.value ?? p.attendance ?? p.att;
+      if (typeof s !== 'string') return null;
+      const up = s.toUpperCase();
+      if (up === 'PRESENT' || up === 'PR') return 'P';
+      if (up === 'ABSENT' || up === 'AB') return 'A';
+      if (up === 'P' || up === 'A') return up;
+      return up;
+        })
+        .filter(Boolean);
+      return statuses;
+    };
+
+    // Heuristic: if date exists, sort by date descending, else assume array order is chronological and iterate from end.
+    const hasDate = days.some(d => d?.date);
+    let ordered = days;
+    if (hasDate) {
+      const parseDate = (s) => {
+        // Supports dd/mm[/yyyy] or yyyy-mm-dd
+        if (!s || typeof s !== 'string') return 0;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s).getTime();
+        const m = s.match(/(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?/);
+        if (m) {
+          const d = parseInt(m[1]);
+          const mo = parseInt(m[2]) - 1;
+          const y = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3])) : new Date().getFullYear();
+          return new Date(y, mo, d).getTime();
+        }
+        return 0;
+      };
+      ordered = [...days].sort((a, b) => parseDate(b?.date) - parseDate(a?.date));
+    }
+
+    let streak = 0;
+    // Iterate from latest to older
+    for (let i = 0; i < ordered.length; i++) {
+      const day = ordered[i];
+      if (isNonWorking(day)) continue; // skip holidays/exams
+      const statuses = extractStatuses(day);
+      if (!statuses.length) continue; // nothing to evaluate
+      const hasP = statuses.some(s => s === 'P');
+      const hasA = statuses.some(s => s === 'A');
+      const allA = statuses.length > 0 && statuses.every(s => s === 'A');
+      if (!hasP && !hasA) {
+        // Not a working day per your rule
+        continue;
+      }
+      if (hasP) {
+        streak += 1;
+        continue;
+      }
+      if (allA) {
+        streak = 0;
+        break; // stop counting further
+      }
+      // Working day with A but not all A (e.g., some OD/ML) => stop without reset
+      break;
+    }
+    return streak;
+  };
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [roll, setRoll] = useState("");
@@ -61,6 +141,31 @@ const FriendsAttendance = () => {
   useEffect(() => {
     localStorage.setItem("friendsAttendance", JSON.stringify(attendanceMap));
   }, [attendanceMap]);
+
+  // Keep friends in localStorage in sync (so computed streak persists)
+  useEffect(() => {
+    try {
+      localStorage.setItem("friends", JSON.stringify(friends));
+    } catch (e) {
+      // ignore storage failures in private mode
+      console.warn('Failed to persist friends to localStorage', e);
+    }
+  }, [friends]);
+
+  // Toggle panel and refresh all friends on open
+  const handleToggleOpen = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && friends.length > 0) {
+      for (const f of friends) {
+        const payload = await fetchAttendanceData(f.roll, f.password);
+        const perc = getPercentageFromData(payload);
+        const streak = computeStreakFromData(payload);
+        setAttendanceMap(prev => ({ ...prev, [f.roll]: perc }));
+        setFriends(fs => fs.map(x => x.roll === f.roll ? { ...x, streak } : x));
+      }
+    }
+  };
 
   // Simple base64 encode/decode helpers
   function encode(str) {
@@ -102,16 +207,23 @@ const FriendsAttendance = () => {
     setPassword("");
     setShowAdd(false);
     // Fetch attendance for the new friend immediately
-    setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: null })); // show loading
-    const perc = await fetchSingleAttendance(newFriend.roll, newFriend.password);
-    setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: perc }));
+  setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: null })); // show loading
+  const payload = await fetchAttendanceData(newFriend.roll, newFriend.password);
+  const perc = getPercentageFromData(payload);
+  const streak = computeStreakFromData(payload);
+  setAttendanceMap(prev => ({ ...prev, [newFriend.roll]: perc }));
+  // Update streak on the friend entry
+  setFriends(fs => fs.map(f => f.roll === newFriend.roll ? { ...f, streak } : f));
   };
 
   // Refresh attendance for a single friend
   const handleRefresh = async (friend) => {
-    setAttendanceMap(prev => ({ ...prev, [friend.roll]: null })); // show loading
-    const perc = await fetchSingleAttendance(friend.roll, friend.password);
-    setAttendanceMap(prev => ({ ...prev, [friend.roll]: perc }));
+  setAttendanceMap(prev => ({ ...prev, [friend.roll]: null })); // show loading
+  const payload = await fetchAttendanceData(friend.roll, friend.password);
+  const perc = getPercentageFromData(payload);
+  const streak = computeStreakFromData(payload);
+  setAttendanceMap(prev => ({ ...prev, [friend.roll]: perc }));
+  setFriends(fs => fs.map(f => f.roll === friend.roll ? { ...f, streak } : f));
   };
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -193,7 +305,7 @@ const FriendsAttendance = () => {
               </Dialog>
             </Transition.Root>
             <button
-              onClick={() => setOpen(!open)}
+              onClick={handleToggleOpen}
               className="flex items-center justify-center px-3 py-1.5 md:px-4 md:py-2 bg-blue-500 rounded-full text-white font-medium text-xs md:text-sm"
               aria-label="Toggle friends attendance"
             >
